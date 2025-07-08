@@ -15,37 +15,42 @@ const REDIRECT_URI =
 // Exchange authorization code for access token
 router.post("/exchange-token", async (req, res) => {
   const { code } = req.body;
+  console.log("Token exchange request received:", { code });
 
   try {
-    console.log("Exchanging token with params:", {
-      grant_type: "authorization_code",
-      client_id: CLIENT_ID,
-      code,
-    });
+    const tokenUrl = `${OZ_AUTH_SERVER}/oauth/token`;
+    console.log("Making token request to:", tokenUrl);
 
     // Exchange code for access token
-    const tokenResponse = await axios.post(`${OZ_AUTH_SERVER}/oauth/token`, {
+    const tokenResponse = await axios.post(tokenUrl, {
       grant_type: "authorization_code",
       client_id: CLIENT_ID,
       client_secret: CLIENT_SECRET,
       code,
     });
 
+    console.log("Token response received:", tokenResponse.data);
     const { access_token } = tokenResponse.data;
 
     // Get user info using access token
-    const userResponse = await axios.get(`${OZ_AUTH_SERVER}/oauth/userinfo`, {
+    const userInfoUrl = `${OZ_AUTH_SERVER}/oauth/userinfo`;
+    console.log("Fetching user info from:", userInfoUrl);
+
+    const userResponse = await axios.get(userInfoUrl, {
       headers: {
         Authorization: `Bearer ${access_token}`,
       },
     });
 
+    console.log("User info received:", userResponse.data);
     const ozUserData = userResponse.data;
 
     // Find or create user in our database
     let user = await User.findOne({ ozId: ozUserData._id });
+    console.log("Existing user found:", !!user);
 
     if (!user) {
+      console.log("Creating new user");
       user = new User({
         email: ozUserData.email,
         name: ozUserData.name,
@@ -53,6 +58,7 @@ router.post("/exchange-token", async (req, res) => {
         profile: ozUserData,
       });
       await user.save();
+      console.log("New user created:", user._id);
     }
 
     // Generate session token
@@ -61,6 +67,8 @@ router.post("/exchange-token", async (req, res) => {
       process.env.JWT_SECRET || "your-secret-key",
       { expiresIn: "7d" }
     );
+
+    console.log("Session token generated for user:", user._id);
 
     res.json({
       token,
@@ -71,11 +79,20 @@ router.post("/exchange-token", async (req, res) => {
       },
     });
   } catch (error) {
-    console.error(
-      "Token exchange error:",
-      error.response?.data || error.message
-    );
-    res.status(500).json({ message: "Error exchanging token" });
+    console.error("Token exchange error details:", {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status,
+      config: {
+        url: error.config?.url,
+        method: error.config?.method,
+        data: error.config?.data,
+      },
+    });
+    res.status(500).json({ 
+      message: "Error exchanging token",
+      details: error.response?.data || error.message
+    });
   }
 });
 
