@@ -1,0 +1,11 @@
+client/node_modules
+client/.env
+
+server auth/node_modules
+server auth/.env
+
+server main/node_modules
+server main/.env
+
+
+
